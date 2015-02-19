@@ -1,14 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
-using System.Net.Http.Formatting;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using IphoneSimulator.Models;
 
 namespace IphoneSimulator
 {
@@ -17,7 +19,7 @@ namespace IphoneSimulator
     /// </summary>
     public partial class MainWindow : Window
     {
-        Guid _id;
+        
         bool _captured = false;
         double _xShape, _xCanvas, _yShape, _yCanvas;
         UIElement _source = null;
@@ -25,15 +27,15 @@ namespace IphoneSimulator
         readonly double[] _reference = { 1, 5, 10 };
         //private static Uri _uri = new Uri("http://localhost:54923/");
         private static Uri _uri = new Uri("http://ibeaconapp2.test.dropit.se/");
+        List<Bus> _busList=new List<Bus>();
 
         public MainWindow()
         {
             InitializeComponent();
-            _id = Guid.NewGuid();
             var image = new ImageBrush() { ImageSource = new BitmapImage((new Uri(@"C:\Users\E601332\Documents\Visual Studio 2013\Projects\IphoneSimulator\IphoneSimulator\Images\bus.jpeg", UriKind.Absolute))) };
             
             Canvas.Background = image;
-            GuidBox.Text = _id.ToString();
+            
             double xp = (Canvas.GetLeft(Ellipse) - Ellipse.ActualWidth / 2) * .03;
             double yp = 2.55 - (Canvas.GetTop(Ellipse) - Ellipse.ActualHeight / 2) * .03;
             for (int i = 0; i < 3; i++)
@@ -51,8 +53,9 @@ namespace IphoneSimulator
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            _id = Guid.NewGuid();
-            GuidBox.Text = _id.ToString();
+            var id = Guid.NewGuid();
+            IdBox.Items.Add(id);
+            IdBox.SelectedItem = id;
         }
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
@@ -60,7 +63,8 @@ namespace IphoneSimulator
             double x = (Canvas.GetLeft(Ellipse)-Ellipse.ActualWidth/2)*.03;
             double y = (Canvas.GetTop(Ellipse)-Ellipse.ActualHeight/2)*.03;
             var major = (Item)Dropdown.SelectedItem;
-            RunAsync(_id, Radius, major.Value);
+            var id = IdBox.Text;
+            RunAsync(id, Radius,"Enter");
         }
 
         public static double Calculate(double x, double y, double reference)
@@ -68,7 +72,7 @@ namespace IphoneSimulator
             return (Math.Sqrt(Math.Pow(x - reference, 2) + y * y));
         }
 
-        private static async Task RunAsync(Guid id,double[] r,int major)
+        private static async Task RunAsync(string id,double[] r,string type)
         {
             using (var client = new HttpClient())
             {
@@ -79,7 +83,7 @@ namespace IphoneSimulator
                 // HTTP POST
                 var culture = CultureInfo.CreateSpecificCulture("en-US");
                 string jsonString = "{\"Longitude\": \"123\",\"Latitude\": \"123\", \"Speed\": \"13.8888\", \"Course\": \"90\",\"DateTime\":\"Jan 21, 2015, 1:57 PM\","
-                                    + "\"Type\" :  \"Enter\",\"Id\" : \"" + id + "\","
+                                    + "\"Type\" :  \""+type+"\",\"Id\" : \"" + id + "\","
                                     +
                                     "\"Beacons\": [{ \"UUID\" : \"73676723-7400-0000-ffff-0000ffff0005\", \"Major\" : 2,\"Minor\" : 682,\"Accuracy\" : \"" + r[0].ToString("G", culture) + "\",\"Proximity\" : \"Far\"},"
                                     +
@@ -87,15 +91,11 @@ namespace IphoneSimulator
                                     +
                                     "{ \"UUID\" : \"73676723-7400-0000-ffff-0000ffff0007\",\"Major\" : 2,\"Minor\" : 682,\"Accuracy\" : \"" + r[2].ToString("G", culture) + "\",\"Proximity\" : \"Far\"}] }";
 
-                HttpResponseMessage response = await client.PostAsJsonAsync("api/Values", jsonString);
-                //if (response.IsSuccessStatusCode)
-                //{
-                //    Uri gizmoUrl = response.Headers.Location;
-                //}
+                await client.PostAsJsonAsync("api/Values", jsonString);
             }
         }
 
-        private static async Task RunAsync2()
+        private static async Task RunAsyncGet()
         {
             using (var client = new HttpClient())
             {
@@ -106,11 +106,7 @@ namespace IphoneSimulator
                 // HTTP GET
                 var culture = CultureInfo.CreateSpecificCulture("en-US");
                 string jsonString = client.GetStringAsync("api/Values").Result;
-                    HttpResponseMessage response = await client.PostAsJsonAsync("api/Values", jsonString);
-                //if (response.IsSuccessStatusCode)
-                //{
-                //    Uri gizmoUrl = response.Headers.Location;
-                //}
+                await client.PostAsJsonAsync("api/Values", jsonString);
             }
         }
         
@@ -167,14 +163,48 @@ namespace IphoneSimulator
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
                 // HTTP GET
-                var culture = CultureInfo.CreateSpecificCulture("en-US");
                 string jsonString = client.GetStringAsync("api/Values").Result;
-                //HttpResponseMessage response = await client.PostAsJsonAsync("api/Values", jsonString);
-                //if (response.IsSuccessStatusCode)
-                //{
-                //    Uri gizmoUrl = response.Headers.Location;
-                //}
+                _busList = new JavaScriptSerializer().Deserialize<List<Bus>>(jsonString);
+                foreach (var passenger in _busList[0].Passengers)
+                {
+                    if (!IdBox.Items.Contains(passenger.Id)) IdBox.Items.Add(passenger.Id);
+                }
             }
+        }
+
+        private void Button_Click_3(object sender, RoutedEventArgs e)
+        {
+        
+            double x = (Canvas.GetLeft(Ellipse)-Ellipse.ActualWidth/2)*.03;
+            double y = (Canvas.GetTop(Ellipse)-Ellipse.ActualHeight/2)*.03;
+            var major = (Item)Dropdown.SelectedItem;
+            string id = IdBox.SelectedItem.ToString();
+            RunAsync(id, Radius,"Exit");
+        }
+
+        private void DropDownClosed(object sender, EventArgs e)
+        {
+            string id = IdBox.Text;
+        }
+
+        private void Button_Click_5(object sender, RoutedEventArgs e)
+        {
+            IdBox.Items.Clear(); 
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = _uri;
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                // HTTP GET
+                string jsonString = client.GetStringAsync("api/Values").Result;
+                _busList = new JavaScriptSerializer().Deserialize<List<Bus>>(jsonString);
+                foreach (var passenger in _busList[0].Passengers)
+                {
+                    IdBox.Items.Add(passenger.Id);
+                }
+            }
+
         }
     }
 
